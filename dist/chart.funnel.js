@@ -1,7 +1,7 @@
 /*!
  * Chart.Funnel.js
  * A funnel plugin for Chart.js(http://chartjs.org/)
- * Version: 1.0.2
+ * Version: 1.0.5
  *
  * Copyright 2016 Jone Casaper
  * Released under the MIT license
@@ -223,6 +223,7 @@ module.exports = function(Chart) {
 				elHeight = (availableHeight - ((visiableNum - 1) * gap)) / visiableNum;
 
 			// save
+			me.bottomWidth = bottomWidth;
 			me.topWidth = topWidth;
 			me.dwRatio = dwRatio;
 			me.elHeight = elHeight;
@@ -232,7 +233,25 @@ module.exports = function(Chart) {
 				me.updateElement(trapezium, index, reset);
 			}, me);
 		},
+		percentageFilled: function percentageFilled(data, maxIndex) {
+			var entries = data.entries();
+			var entry;
+			var total = 0;
+			var indexTotal = 0;
 
+			while ((entry = entries.next()) && !entry.done) {
+				var pointIndex = entry.value[0];
+				var value = entry.value[1];
+
+				if (pointIndex < maxIndex) {
+					indexTotal += value;
+				}
+
+				total += value;
+			}
+
+			return indexTotal/total;
+		},
 		// update elements
 		updateElement: function updateElement(trapezium, index, reset) {
 			var me = this,
@@ -252,6 +271,40 @@ module.exports = function(Chart) {
 				viewIndex = elementData._viewIndex < 0 ? index : elementData._viewIndex,
 				base = chartArea.top + (viewIndex + 1) * (elHeight + gap) - gap;
 
+			if (opts.keep === 'left') {
+				elementType = 'scalene';
+				x1 = chartArea.left + upperWidth / 2;
+				x2 = chartArea.left + bottomWidth / 2;
+			} else if (opts.keep === 'right') {
+				elementType = 'scalene';
+				x1 = chartArea.right - upperWidth/ 2;
+				x2 = chartArea.right - bottomWidth / 2;
+			} else {
+				x = (chartArea.left + chartArea.right) / 2;
+			}
+
+			var dataPoints = me.sortedDataAndLabels.map(function(el) {
+				return el.val;
+			});
+
+			var percentageFilled = this.percentageFilled(dataPoints, index);
+
+			y = chartArea.bottom * percentageFilled;
+
+			var nextElement = helpers.findNextWhere(me.sortedDataAndLabels,
+				function (el) {
+					return !el.hidden;
+				},
+				index
+			);
+
+			var nextPercentageFilled = 0;
+			base = me.bottomWidth;
+			if (nextElement) {
+				nextPercentageFilled = this.percentageFilled(dataPoints, index + 1);
+				base = chartArea.bottom * nextPercentageFilled;
+			}
+
 			if (sort === 'asc') {
 				// Find previous element which is visible
 				var previousElement = helpers.findPreviousWhere(me.sortedDataAndLabels,
@@ -263,27 +316,8 @@ module.exports = function(Chart) {
 				upperWidth = previousElement ? previousElement.val * dwRatio : me.topWidth;
 				bottomWidth = elementData.val * dwRatio;
 			} else {
-				var nextElement = helpers.findNextWhere(me.sortedDataAndLabels,
-					function (el) {
-						return !el.hidden;
-					},
-					index
-				);
-				upperWidth = elementData.val * dwRatio;
-				bottomWidth = nextElement ? nextElement.val * dwRatio : me.topWidth;
-			}
-
-			y = chartArea.top + viewIndex * (elHeight + gap);
-			if (opts.keep === 'left') {
-				elementType = 'scalene';
-				x1 = chartArea.left + upperWidth / 2;
-				x2 = chartArea.left + bottomWidth / 2;
-			} else if (opts.keep === 'right') {
-				elementType = 'scalene';
-				x1 = chartArea.right - upperWidth/ 2;
-				x2 = chartArea.right - bottomWidth / 2;
-			} else {
-				x = (chartArea.left + chartArea.right) / 2;
+				upperWidth = chartArea.right * (1-percentageFilled);
+				bottomWidth = nextElement ?  chartArea.right * (1-nextPercentageFilled) : me.topWidth;
 			}
 
 			helpers.extend(trapezium, {
@@ -315,6 +349,7 @@ module.exports = function(Chart) {
 		}
 	});
 };
+
 },{}],4:[function(require,module,exports){
 /**
  *
